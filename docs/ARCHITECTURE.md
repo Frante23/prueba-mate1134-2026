@@ -38,7 +38,7 @@ Separar `isValidUctEmail` de `isUctDomainEmail` es intencional. Crear datos exig
 ```text
 canonicalEmail = trim(email).toLowerCase()
 studentKey     = first32hex(sha256(canonicalEmail))
-pathname       = attendance-v1/<studentKey>/record.json
+pathname       = attendance-v1/<studentKey>/record-<timestamp>-<uuid>.json
 ```
 
 ```ts
@@ -58,7 +58,7 @@ Entradas que solo difieren en mayúsculas o espacios exteriores producen el mism
 
 ### I2. Un voto activo
 
-Existe una sola ruta canónica por hash. `put(..., allowOverwrite: true)` convierte cada envío posterior en actualización. La unidad modificada es el documento completo, por lo que nombre, respuesta y fecha permanecen coherentes.
+Existe un solo voto lógico por hash. Cada envío publica un documento completo con URL inmutable y luego elimina las versiones anteriores. Nombre, respuesta y fecha permanecen coherentes.
 
 ### I3. Lectura defensiva
 
@@ -69,9 +69,7 @@ Existe una sola ruta canónica por hash. `put(..., allowOverwrite: true)` convie
 Una eliminación borra:
 
 ```text
-attendance-v1/<hash>/record.json
-attendance-v1/<hash>/yes.json
-attendance-v1/<hash>/no.json
+attendance-v1/<hash>/*
 ```
 
 ### I5. Privacidad de agregados
@@ -80,9 +78,9 @@ attendance-v1/<hash>/no.json
 
 ## 4. Consistencia y concurrencia
 
-Un envío escribe el documento canónico y después elimina posibles documentos heredados. La escritura atómica sobre una ruta estable ofrece semántica de último escritor. Si dos solicitudes del mismo correo compiten, solo una versión queda en `record.json`.
+Un envío lista las versiones previas, publica una URL inmutable y después elimina las anteriores. La lectura ofrece semántica de último escritor por fecha de carga. Si dos solicitudes compiten, la reducción conserva una sola versión lógica aunque una carrera deje temporalmente más de un blob físico.
 
-Durante una migración podrían coexistir brevemente el documento canónico y uno heredado. La reducción por hash impide contarlos dos veces. No se usa un contador separado: cada resumen se reconstruye desde registros para evitar divergencias entre métricas y detalle.
+Las URL inmutables evitan que el CDN devuelva una respuesta anterior al cambiar de Sí a No. Durante escritura o migración pueden coexistir brevemente varias versiones; la reducción por hash impide contarlas dos veces. No se usa un contador separado: cada resumen se reconstruye desde registros.
 
 ## 5. Cálculo de resultados
 
@@ -122,7 +120,7 @@ Las API declaran `force-dynamic`; las lecturas usan `Cache-Control: no-store`. E
 
 ## 10. Compatibilidad y migración
 
-La primera versión usaba una ruta por alternativa. La actual lee ambos diseños, elimina legado en la próxima escritura y elimina tres rutas al borrar. No requiere migración masiva.
+Las primeras versiones usaban una ruta por alternativa y luego una ruta sobrescribible. La actual lee todos los diseños, elimina legado en la próxima escritura y borra todo el namespace al eliminar. No requiere migración masiva.
 
 Los registros heredados pueden tener un correo que ya no pasa el patrón vigente. DELETE los admite si mantienen el dominio exacto `@alu.uct.cl`. La excepción no relaja la creación de votos.
 

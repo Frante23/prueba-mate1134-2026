@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { del, get, list, put, type ListBlobResultBlob } from "@vercel/blob";
 import { normalizeEmail } from "@/lib/validation";
 
@@ -26,12 +26,12 @@ function emailHash(email: string) {
   return createHash("sha256").update(normalizeEmail(email)).digest("hex").slice(0, 32);
 }
 
-function legacyPathnameFor(email: string, answer: AttendanceAnswer) {
-  return `${PREFIX}${emailHash(email)}/${answer}.json`;
+function studentPrefix(email: string) {
+  return `${PREFIX}${emailHash(email)}/`;
 }
 
 function pathnameFor(email: string) {
-  return `${PREFIX}${emailHash(email)}/record.json`;
+  return `${studentPrefix(email)}record-${Date.now()}-${randomUUID()}.json`;
 }
 
 async function listAll(): Promise<ListBlobResultBlob[]> {
@@ -64,6 +64,7 @@ function latestPerStudent(blobs: ListBlobResultBlob[]) {
 
 export async function saveAttendance(name: string, email: string, answer: AttendanceAnswer) {
   const normalizedEmail = normalizeEmail(email);
+  const previous = await list({ prefix: studentPrefix(normalizedEmail), limit: 1000 });
   const record: AttendanceRecord = {
     name,
     email: normalizedEmail,
@@ -71,34 +72,32 @@ export async function saveAttendance(name: string, email: string, answer: Attend
     updatedAt: new Date().toISOString()
   };
 
-  // Una ruta estable por correo hace que un segundo envío reemplace al primero.
-  // Vercel Blob publica cada escritura de forma atómica, por lo que el panel
-  // nunca necesita sumar dos archivos para un mismo estudiante.
+  // Cada versión usa una URL inmutable. Sobrescribir una misma URL podría
+  // devolver contenido cacheado durante algunos segundos; una URL nueva hace
+  // que el cambio Sí/No sea visible inmediatamente en los resultados en vivo.
   await put(pathnameFor(normalizedEmail), JSON.stringify(record), {
     access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
-    allowOverwrite: true,
+    allowOverwrite: false,
     cacheControlMaxAge: 60
   });
 
-  // Limpieza de las dos rutas usadas por versiones anteriores. `del` acepta
-  // rutas inexistentes, así que esta migración es segura e idempotente.
-  await del([
-    legacyPathnameFor(normalizedEmail, "yes"),
-    legacyPathnameFor(normalizedEmail, "no")
-  ]);
+  // El lector agrupa por hash, de modo que siempre existe un solo voto lógico.
+  // Después se limpian las versiones previas y las rutas de esquemas anteriores.
+  if (previous.blobs.length) {
+    await del(previous.blobs.map((blob) => blob.pathname));
+  }
 
   return record;
 }
 
 export async function deleteAttendance(email: string) {
   const normalizedEmail = normalizeEmail(email);
-  await del([
-    pathnameFor(normalizedEmail),
-    legacyPathnameFor(normalizedEmail, "yes"),
-    legacyPathnameFor(normalizedEmail, "no")
-  ]);
+  const blobs = await list({ prefix: studentPrefix(normalizedEmail), limit: 1000 });
+  if (blobs.blobs.length) {
+    await del(blobs.blobs.map((blob) => blob.pathname));
+  }
 }
 
 function summarize(records: AttendanceRecord[]): AttendanceSummary {

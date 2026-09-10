@@ -23,7 +23,7 @@ Un reenvío puede mover una unidad entre Sí y No, pero no aumenta el total.
 4. Confirmar la acción.
 5. Esperar el mensaje verde y verificar que desaparezca.
 
-La operación elimina la ruta canónica y las variantes históricas Sí y No. No hay papelera; si se borra por error, el estudiante debe volver a responder.
+La operación elimina todas las versiones bajo el hash del correo, incluidas las variantes históricas Sí y No. No hay papelera; si se borra por error, el estudiante debe volver a responder.
 
 La eliminación admite votos históricos cuyo usuario ya no cumple la regla de año, siempre que el dominio sea exactamente `alu.uct.cl`. Así se pueden sanear pruebas antiguas sin volver a aceptarlas en el formulario.
 

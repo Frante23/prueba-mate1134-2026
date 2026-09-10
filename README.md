@@ -36,12 +36,12 @@ Aplicación web responsiva para consultar a estudiantes de la Universidad Catól
 La identidad es el correo normalizado: se eliminan espacios exteriores y se convierte a minúsculas. Se calcula un SHA-256 truncado usado como clave privada:
 
 ```text
-attendance-v1/<hash-del-correo>/record.json
+attendance-v1/<hash-del-correo>/record-<version-unica>.json
 ```
 
-Si el estudiante responde nuevamente, el archivo se sobrescribe atómicamente. El segundo envío no aumenta el total; la respuesta, nombre y fecha nuevos reemplazan a los anteriores; mayúsculas o espacios no crean duplicados; y el panel muestra como máximo una fila por identidad.
+Si el estudiante responde nuevamente, se publica una versión con URL inmutable y se limpian las versiones previas. El segundo envío no aumenta el total; la respuesta, nombre y fecha nuevos reemplazan lógicamente a los anteriores; mayúsculas o espacios no crean duplicados; y el panel muestra como máximo una fila por identidad.
 
-El lector conserva además una reducción defensiva por hash. Esto evita duplicados visibles durante la transición desde el esquema anterior, que guardaba `yes.json` y `no.json`. Al guardar o eliminar se limpian las posibles rutas heredadas.
+El lector reduce siempre por hash y conserva la versión más reciente. Esto evita duplicados incluso ante solicitudes simultáneas y durante la transición desde esquemas anteriores (`yes.json`, `no.json` o `record.json`). Las URL versionadas evitan servir durante unos segundos contenido antiguo desde la caché de Blob.
 
 ## Validación del correo
 

@@ -6,7 +6,7 @@ Este documento describe los cambios funcionales y técnicos. Git conserva el det
 
 ### Creado
 
-- Ruta canónica `record.json` por identidad institucional.
+- Namespace canónico por identidad y URL inmutable por actualización.
 - Normalización compartida de correo.
 - Validador administrativo para datos heredados.
 - Respuesta `mode: created-or-updated` que explicita la semántica.
@@ -16,9 +16,9 @@ Este documento describe los cambios funcionales y técnicos. Git conserva el det
 
 ### Modificado
 
-- La persistencia pasó de una ruta por alternativa a una estable por correo.
+- La persistencia pasó de una ruta por alternativa a un namespace versionado por correo.
 - El hash utiliza correo sin espacios exteriores y en minúsculas.
-- Un envío posterior reemplaza el documento completo.
+- Un envío posterior publica el documento completo y limpia versiones previas.
 - La agregación deriva la respuesta del documento, no del nombre del archivo.
 - El panel obtiene resumen y registros desde una instantánea lógica.
 - La eliminación borra ruta canónica, Sí heredada y No heredada.
@@ -30,6 +30,7 @@ Este documento describe los cambios funcionales y técnicos. Git conserva el det
 - Un voto como `francooyarzo12@alu.uct.cl` se veía, pero no podía eliminarse porque DELETE reutilizaba la validación estricta de creación.
 - La tolerancia indiscriminada durante la limpieza podía ocultar fallos reales.
 - Variaciones de mayúsculas o espacios quedaron bajo una identidad.
+- Una URL sobrescrita podía mostrar temporalmente el voto anterior por la caché mínima de Blob; las versiones inmutables eliminan esa lectura obsoleta.
 
 ### Eliminado
 
