@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { deleteAttendance, getRecords, getSummary } from "@/lib/store";
+import { deleteAttendance, getAttendanceSnapshot } from "@/lib/store";
 import { isUctDomainEmail, normalizeEmail } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Correo o contraseña incorrectos." }, { status: 401 });
     }
 
-    const [summary, records] = await Promise.all([getSummary(), getRecords()]);
+    const { summary, records } = await getAttendanceSnapshot();
     return NextResponse.json({ summary, records }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Unable to load teacher dashboard", error);

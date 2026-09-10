@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { del, get, list, put, type ListBlobResultBlob } from "@vercel/blob";
+import { normalizeEmail } from "@/lib/validation";
 
 export type AttendanceAnswer = "yes" | "no";
 
@@ -22,11 +23,15 @@ export type AttendanceSummary = {
 const PREFIX = "attendance-v1/";
 
 function emailHash(email: string) {
-  return createHash("sha256").update(email).digest("hex").slice(0, 32);
+  return createHash("sha256").update(normalizeEmail(email)).digest("hex").slice(0, 32);
 }
 
-function pathnameFor(email: string, answer: AttendanceAnswer) {
+function legacyPathnameFor(email: string, answer: AttendanceAnswer) {
   return `${PREFIX}${emailHash(email)}/${answer}.json`;
+}
+
+function pathnameFor(email: string) {
+  return `${PREFIX}${emailHash(email)}/record.json`;
 }
 
 async function listAll(): Promise<ListBlobResultBlob[]> {
@@ -58,14 +63,18 @@ function latestPerStudent(blobs: ListBlobResultBlob[]) {
 }
 
 export async function saveAttendance(name: string, email: string, answer: AttendanceAnswer) {
+  const normalizedEmail = normalizeEmail(email);
   const record: AttendanceRecord = {
     name,
-    email,
+    email: normalizedEmail,
     answer,
     updatedAt: new Date().toISOString()
   };
 
-  await put(pathnameFor(email, answer), JSON.stringify(record), {
+  // Una ruta estable por correo hace que un segundo envío reemplace al primero.
+  // Vercel Blob publica cada escritura de forma atómica, por lo que el panel
+  // nunca necesita sumar dos archivos para un mismo estudiante.
+  await put(pathnameFor(normalizedEmail), JSON.stringify(record), {
     access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
@@ -73,31 +82,31 @@ export async function saveAttendance(name: string, email: string, answer: Attend
     cacheControlMaxAge: 60
   });
 
-  const opposite: AttendanceAnswer = answer === "yes" ? "no" : "yes";
-  try {
-    await del(pathnameFor(email, opposite));
-  } catch {
-    // It is normal for the opposite response not to exist yet.
-  }
+  // Limpieza de las dos rutas usadas por versiones anteriores. `del` acepta
+  // rutas inexistentes, así que esta migración es segura e idempotente.
+  await del([
+    legacyPathnameFor(normalizedEmail, "yes"),
+    legacyPathnameFor(normalizedEmail, "no")
+  ]);
 
   return record;
 }
 
 export async function deleteAttendance(email: string) {
-  await Promise.all([
-    del(pathnameFor(email, "yes")),
-    del(pathnameFor(email, "no"))
+  const normalizedEmail = normalizeEmail(email);
+  await del([
+    pathnameFor(normalizedEmail),
+    legacyPathnameFor(normalizedEmail, "yes"),
+    legacyPathnameFor(normalizedEmail, "no")
   ]);
 }
 
-export async function getSummary(): Promise<AttendanceSummary> {
-  const blobs = latestPerStudent(await listAll());
-  const yes = blobs.filter((blob) => blob.pathname.endsWith("/yes.json")).length;
-  const no = blobs.filter((blob) => blob.pathname.endsWith("/no.json")).length;
+function summarize(records: AttendanceRecord[]): AttendanceSummary {
+  const yes = records.filter((record) => record.answer === "yes").length;
+  const no = records.filter((record) => record.answer === "no").length;
   const total = yes + no;
-  const updatedAt = blobs.reduce<string | null>((latest, blob) => {
-    const date = new Date(blob.uploadedAt).toISOString();
-    return !latest || date > latest ? date : latest;
+  const updatedAt = records.reduce<string | null>((latest, record) => {
+    return !latest || record.updatedAt > latest ? record.updatedAt : latest;
   }, null);
 
   return {
@@ -130,4 +139,13 @@ export async function getRecords(): Promise<AttendanceRecord[]> {
   return records
     .filter((record): record is AttendanceRecord => Boolean(record))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function getAttendanceSnapshot() {
+  const records = await getRecords();
+  return { summary: summarize(records), records };
+}
+
+export async function getSummary(): Promise<AttendanceSummary> {
+  return (await getAttendanceSnapshot()).summary;
 }

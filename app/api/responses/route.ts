@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveAttendance, type AttendanceAnswer } from "@/lib/store";
-import { isFullName, isValidUctEmail, normalizeName } from "@/lib/validation";
+import { isFullName, isValidUctEmail, normalizeEmail, normalizeName } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { name?: unknown; email?: unknown; answer?: unknown };
     const name = typeof body.name === "string" ? normalizeName(body.name) : "";
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
     const answer = body.answer as AttendanceAnswer;
 
     if (!isFullName(name)) {
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     const record = await saveAttendance(name, email, answer);
-    return NextResponse.json({ ok: true, record });
+    return NextResponse.json({ ok: true, mode: "created-or-updated", record });
   } catch (error) {
     console.error("Unable to save attendance response", error);
     return NextResponse.json(
