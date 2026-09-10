@@ -6,6 +6,21 @@ export function normalizeName(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
+export function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Comprueba solamente que el registro pertenece al dominio institucional.
+ * Se usa en operaciones administrativas sobre datos heredados, que pueden
+ * haber sido guardados antes de que existiera la validación de formato actual.
+ */
+export function isUctDomainEmail(value: string) {
+  const email = normalizeEmail(value);
+  const parts = email.split("@");
+  return parts.length === 2 && parts[0].length > 0 && parts[1] === "alu.uct.cl";
+}
+
 export function isFullName(value: string) {
   const normalized = normalizeName(value);
   const words = normalized.split(" ").filter(Boolean);
@@ -35,7 +50,7 @@ export function isValidUctUsername(value: string) {
 }
 
 export function isValidUctEmail(value: string) {
-  const email = value.trim().toLowerCase();
+  const email = normalizeEmail(value);
   const suffix = "@alu.uct.cl";
   if (!email.endsWith(suffix)) return false;
   const username = email.slice(0, -suffix.length);

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { deleteAttendance, getRecords, getSummary } from "@/lib/store";
-import { isValidUctEmail } from "@/lib/validation";
+import { isUctDomainEmail, normalizeEmail } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ function hasValidCredentials(email: string, password: string) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { email?: unknown; password?: unknown };
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
     const password = typeof body.password === "string" ? body.password : "";
     const credentialsValid = hasValidCredentials(email, password);
     if (credentialsValid === null) {
@@ -45,9 +45,9 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const body = (await request.json()) as { email?: unknown; password?: unknown; studentEmail?: unknown };
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
     const password = typeof body.password === "string" ? body.password : "";
-    const studentEmail = typeof body.studentEmail === "string" ? body.studentEmail.trim().toLowerCase() : "";
+    const studentEmail = typeof body.studentEmail === "string" ? normalizeEmail(body.studentEmail) : "";
     const credentialsValid = hasValidCredentials(email, password);
 
     if (credentialsValid === null) {
@@ -56,8 +56,8 @@ export async function DELETE(request: Request) {
     if (!credentialsValid) {
       return NextResponse.json({ error: "Correo o contraseña incorrectos." }, { status: 401 });
     }
-    if (!isValidUctEmail(studentEmail)) {
-      return NextResponse.json({ error: "El correo del voto no es válido." }, { status: 400 });
+    if (!isUctDomainEmail(studentEmail)) {
+      return NextResponse.json({ error: "El registro no contiene un correo UCT eliminable." }, { status: 400 });
     }
 
     await deleteAttendance(studentEmail);
